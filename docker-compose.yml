@@ -1,0 +1,12 @@
+services:
+  appva:
+    image: ghcr.io/socfortress/appva:latest
+    network_mode: host
+    environment:
+      - APPVA_ADMIN_PASSWORD=${APPVA_ADMIN_PASSWORD}
+    volumes:
+      - appva-data:/data
+    restart: unless-stopped
+
+volumes:
+  appva-data:
