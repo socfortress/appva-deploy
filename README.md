@@ -1,6 +1,6 @@
 # AppVA — Application Vulnerability Assessment
 
-AppVA is a containerized SBOM-based vulnerability scanning platform built for SOC teams. It generates Software Bills of Materials (SBOM) via [Syft](https://github.com/anchore/syft) and scans them for known CVEs via [Grype](https://github.com/anchore/grype), presenting findings through a secure web dashboard with PDF reporting, a remediation tracker, scheduled scans, and external notification support (Teams, Slack, Webhook).
+AppVA is a containerized SBOM-based vulnerability scanning platform built for SOC teams. It generates Software Bills of Materials (SBOM) via [Syft](https://github.com/anchore/syft) and scans them for known CVEs via [Grype](https://github.com/anchore/grype), presenting findings through a secure web dashboard with PDF reporting, a remediation tracker, scheduled scans, branch-change monitoring, external notification support (Teams, Slack, Webhook), and API service accounts for automation.
 
 Built by [SOCFortress](https://www.socfortress.co).
 
@@ -106,6 +106,82 @@ To obtain a license key, contact [SOCFortress](https://www.socfortress.co).
 
 ---
 
+## Branch Watcher
+
+AppVA can monitor a GitHub repository's branch for new commits and alert you via the in-app notification bell — no webhook setup required on the GitHub side.
+
+**How it works:** AppVA periodically runs `git ls-remote` against the remote URL and compares the returned HEAD commit SHA to the last known value. Only a single network round-trip is needed per check — no clone or fetch is performed.
+
+**To enable for a repository:**
+
+1. Open the repository detail page (**Repositories** → click the repo name)
+2. In the **Branch Watcher** section, click **Enable Branch Watcher**
+3. Choose a check interval (15 min – daily) and optionally enable **Auto-scan on change**
+4. Click **Enable**
+
+| Option | Description |
+|---|---|
+| Check interval | How often to poll the remote branch (15 min, 30 min, 1 h, 2 h, 4 h, or daily) |
+| Auto-scan on change | Automatically trigger a full scan when new commits are detected |
+
+When a branch change is detected:
+- A **blue** notification appears in the bell (top-right) with the commit change details
+- If auto-scan is disabled, the notification prompts you to trigger a scan manually
+- If auto-scan is enabled but another scan is already running, the scan is skipped for that cycle and noted in the notification
+
+The watcher uses the repository's per-repo GitHub token if configured, otherwise falls back to the global default token in Settings.
+
+---
+
+## Service Accounts
+
+Service accounts provide static API keys for external automation tools, CI/CD pipelines, and integrations. Unlike human user accounts, service accounts require no password or 2FA — they authenticate with a single bearer token.
+
+Only **admin** users can create, rotate, or delete service accounts (**Service Accounts** in the sidebar).
+
+### Access levels
+
+| Level | Equivalent to | Capabilities |
+|---|---|---|
+| `read-only` | `read_only` role | View dashboard, results, scan history, repositories |
+| `read-write` | `operator` role | Trigger scans, manage repositories, schedules, branch watchers |
+
+### Creating a service account
+
+1. Navigate to **Service Accounts** (admin only)
+2. Click **New Account**, enter a name, choose access level, and optionally set an expiry date
+3. Click **Create & Generate Token**
+4. **Copy the token immediately** — it is shown exactly once and cannot be retrieved afterwards
+
+### Using the token
+
+Pass the token in the `Authorization` header of every request:
+
+```bash
+# Trigger a scan (read-write account)
+curl -sk -X POST https://<host>:8443/scan/trigger \
+  -H "Authorization: Bearer appva_<your-token>" \
+  -d "repo_id=1"
+
+# Fetch scan status (any access level)
+curl -sk https://<host>:8443/scan/status \
+  -H "Authorization: Bearer appva_<your-token>"
+
+# List repositories (any access level)
+curl -sk https://<host>:8443/repositories \
+  -H "Authorization: Bearer appva_<your-token>"
+```
+
+An invalid or expired token returns `HTTP 401` with a JSON error — never a redirect to the login page.
+
+### Token security
+
+- Tokens are prefixed with `appva_` followed by 64 hex characters (256 bits of entropy)
+- Only a SHA-256 hash of the token is stored — the raw secret is never persisted after the creation page is left
+- Rotate a token at any time from the Service Accounts page; the old token is invalidated immediately
+
+---
+
 ## Updating
 
 Pull the latest image and recreate the container:
@@ -141,9 +217,11 @@ docker compose restart
 
 | Role | Access |
 |---|---|
-| `admin` | Full access including user management, settings, and license activation |
-| `operator` | Manage repositories, trigger scans, view results; no user or settings access |
+| `admin` | Full access including user management, service accounts, settings, and license activation |
+| `operator` | Manage repositories, trigger scans, manage schedules and branch watchers, view results; no user or settings access |
 | `read_only` | View dashboard, results, and documentation only |
+
+For machine-to-machine access without 2FA, use [Service Accounts](#service-accounts) instead of regular user accounts.
 
 ---
 
