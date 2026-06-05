@@ -1,6 +1,7 @@
 services:
   appva:
     image: ghcr.io/socfortress/appva:latest
+    init: true
     network_mode: host
     environment:
       - APPVA_ADMIN_PASSWORD=${APPVA_ADMIN_PASSWORD}
