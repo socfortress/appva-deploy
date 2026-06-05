@@ -1,6 +1,6 @@
 # AppVA — Application Vulnerability Assessment
 
-AppVA is a containerized SBOM-based vulnerability scanning platform built for SOC teams. It generates Software Bills of Materials (SBOM) via [Syft](https://github.com/anchore/syft) and scans them for known CVEs via [Grype](https://github.com/anchore/grype), presenting findings through a secure web dashboard with PDF reporting, a remediation tracker, scheduled scans, branch-change monitoring, external notification support (Teams, Slack, Webhook), and API service accounts for automation.
+AppVA is a containerized SBOM-based vulnerability scanning platform built for SOC teams. It generates Software Bills of Materials (SBOM) via [Syft](https://github.com/anchore/syft) and scans them for known CVEs via [Grype](https://github.com/anchore/grype), presenting findings through a secure web dashboard with PDF reporting, a remediation tracker, automated fix PRs, scheduled scans, branch-change monitoring, external notification support (Teams, Slack, Webhook), and API service accounts for automation.
 
 Built by [SOCFortress](https://www.socfortress.co).
 
@@ -103,6 +103,37 @@ To unlock **unlimited repositories**, import a valid license key:
 The license is verified online against the SOCFortress licensing server and re-validated automatically every 24 hours. The container requires outbound HTTPS access to `app.cryptolens.io` for license verification.
 
 To obtain a license key, contact [SOCFortress](https://www.socfortress.co).
+
+---
+
+## Self-Remediation (Fix PRs)
+
+AppVA can automatically create a GitHub pull request that bumps vulnerable packages to their Grype-reported fix versions — no CI/CD pipeline integration required.
+
+**To create a fix PR:**
+
+1. Go to **Remediation** and filter by a GitHub repository
+2. Click **Create Fix PR (N)** — this button appears when eligible items exist
+3. Read the caution modal carefully, check the acknowledgement box, then click **Create Pull Request**
+
+| Manifest type | File edited |
+|---|---|
+| `npm` | `package.json` |
+| `python` | `requirements.txt` |
+| `go-module` | `go.mod` |
+| `rust-crate` | `Cargo.toml` |
+
+### ⚠️ Important Limitations — Read Before Using
+
+| Limitation | Detail |
+|---|---|
+| **Lock files are NOT updated** | `package-lock.json`, `yarn.lock`, `go.sum`, `Cargo.lock` etc. are not modified. The PR will fail lock-file CI checks until you regenerate them on the fix branch. |
+| **Manifest edits only — no install** | The version is written to the manifest file but `npm install`, `go mod tidy`, `cargo update`, etc. are not run. The change is not validated against the full dependency graph. |
+| **No breaking-change detection** | Grype picks the lowest known fix version. Major version bumps can break your code. Always review the changelog before merging. |
+| **Transitive deps not addressed** | If the vulnerable package is an indirect dependency, editing your manifest has no effect. The upstream library must fix it first. |
+| **OS / JVM packages excluded** | Alpine (`apk`), Debian (`deb`), RPM, Java JARs, and compiled binaries cannot be fixed via manifest editing. |
+| **Token write access required** | The GitHub token must have permission to create branches and PRs (`repo` scope for classic PATs; `contents:write` + `pull-requests:write` for fine-grained tokens). |
+| **Test before merging** | Always run your full test suite against the fix branch before merging. |
 
 ---
 
